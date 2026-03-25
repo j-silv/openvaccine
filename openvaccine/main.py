@@ -5,6 +5,9 @@ from .data import (
     RNATokenizer
 )
 
+from .model import RNAModel
+from .train import train
+
 def main():
     json_data = load_data(max_lines=10)
 
@@ -15,6 +18,9 @@ def main():
     train_dataloader = create_dataloader(train_dataset, tokenizer)
     val_dataloader = create_dataloader(val_dataset, tokenizer)
 
+    model = RNAModel()
+
+    train(model, train_dataloader, val_dataloader)
 
 if __name__ == "__main__":
     main()
