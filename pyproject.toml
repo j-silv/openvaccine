@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openvaccine"
+version = "1.0.0"
+dependencies = [
+  "torch",
+  "numpy",
+  "matplotlib"
+]
+authors = [ { name = "Justin Silver" } ]
+description = "OpenVaccine Kaggle competition"
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["ai", "kaggle", "vaccine", "machine learning"]
+
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Operating System :: Unix",
+]
+
+license = "LicenseRef-Proprietary"
+license-files = ["LICEN[CS]E*"]
+
+[project.scripts]
+openvaccine = "openvaccine.main:main"
+
+[tool.setuptools.packages]
+find = {namespaces = false}  # Disable implicit namespaces
