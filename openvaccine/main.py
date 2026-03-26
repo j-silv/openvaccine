@@ -6,9 +6,13 @@ from .data import (
 )
 
 from .model import RNAModel
-from .train import train
+from .train import pretrain
+import torch
+import random
 
-def main():
+def main(): 
+    torch.manual_seed(123)
+
     json_data = load_data(max_lines=10)
 
     tokenizer = RNATokenizer()
@@ -18,9 +22,22 @@ def main():
     train_dataloader = create_dataloader(train_dataset, tokenizer)
     val_dataloader = create_dataloader(val_dataset, tokenizer)
 
-    model = RNAModel()
+    # inspired from Build an LLM from Scratch
+    cfg = dict(
+        embd=768, # transformer embedding dimension
+        vocab_len=tokenizer.vocab_size, # 4 nucleotides + mask + pad token
+        seq_len=107, # 107 for training data as per Kaggle competition
+        out_dim=3, # 3 regression targets for each letter in sequence
+        n_heads=12, # number of heads in multi-head attention
+        n_layers=12, # number of transformer blocks
+        drop_rate=0.1, # dropout probaility for regularization
+        qkv_bias=False, # use bias in query, key, value linear projections
+        mask_token=tokenizer.encode("m") # for masking in forward pass
+    )
 
-    train(model, train_dataloader, val_dataloader)
+    model = RNAModel(cfg)
+
+    pretrain(model, train_dataloader, val_dataloader)
 
 if __name__ == "__main__":
     main()

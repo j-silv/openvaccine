@@ -10,11 +10,13 @@ class RNATokenizer:
         self.l2t = dict() # letter to token
         self.t2l = dict() # token to letter
 
-        letters = ["A", "C", "G", "U"]
+        letters = ["A", "C", "G", "U", "m", "p"] # m for mask, p for pad
 
         for i, letter in enumerate(letters):
             self.l2t[letter] = i
             self.t2l[i] = letter
+
+        self.vocab_size = len(self.l2t)
 
     def encode(self, string):
         result = []
