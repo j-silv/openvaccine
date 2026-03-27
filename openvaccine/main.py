@@ -19,8 +19,8 @@ def main():
     
     train_dataset, val_dataset = split_data(json_data)
 
-    train_dataloader = create_dataloader(train_dataset, tokenizer)
-    val_dataloader = create_dataloader(val_dataset, tokenizer)
+    train_dataloader = create_dataloader(train_dataset, tokenizer,batch_size=8)
+    val_dataloader = create_dataloader(val_dataset, tokenizer, batch_size=8)
 
     # inspired from Build an LLM from Scratch
     cfg = dict(

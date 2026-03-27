@@ -101,41 +101,54 @@ class TransformerBlock(nn.Module):
         return x
 
 
-def mask_tokens(tokens, mask_token, vocab_len):
+def mask_tokens(tokens, mask_token, vocab_len, change_all_to_mask=True, test_without_masking=False, test_without_sampling=False):
+    # TODO I suspect there is a bug here... loss stays at around 1.0-1.3 when trying to overfit. Might just be capacity of model.
+    # should try removing the 80%, 10%, and 10% thing and just try replacing the indexed tokens with the mask token
     batch_len, seq_len = tokens.shape
 
-    # TODO replace with simpler torch.rand < 0.15
-    # randomly choose 15% of the tokens
-    selected_idxs = torch.multinomial(
-        # every index has equal probability of being selected
-        torch.ones_like(tokens, dtype=torch.float32),
-        num_samples=int(0.15*seq_len),
-        replacement=False
-    )
-
-    # of those 15% tokens selected:
-    # - set to mask token with 80% probability
-    # - set to random token with 10% probability
-    # - don't change with 10% probability
-    # TODO replace with simpler torch.rand
-    action = torch.multinomial(
-        torch.tensor([0.8, 0.1, 0.1]),
-        num_samples=selected_idxs.numel(),
-        replacement=True
-    )
-    action = action.reshape(selected_idxs.shape)
-
-    # now that we know which indices to select and we know what action to perform,
+    # to overfit without the random sampling
+    if test_without_masking:
+        selected_idxs = torch.arange(seq_len, device=tokens.device)
+    else:
+        # TODO replace with simpler torch.rand < 0.15
+        # randomly choose 15% of the tokens
+        selected_idxs = torch.multinomial(
+            # every index has equal probability of being selected
+            torch.ones_like(tokens, dtype=torch.float32, device=tokens.device),
+            num_samples=int(0.15*seq_len),
+            replacement=False,
+        )
+    
+    # now that we know which indices to select and later we determine which action to perform,
     # let's select the actual values now
     # we broadcast the first index array to selected_idxs size so we can select the appropiate elements
-    masked_tokens_idx = (torch.arange(batch_len)[:, None], selected_idxs)
+    masked_tokens_idx = (torch.arange(batch_len, device=tokens.device)[:, None], selected_idxs)
 
-    masked_tokens = torch.where(action == 0, mask_token, action)
+    if test_without_sampling:
+        masked_tokens = tokens[masked_tokens_idx]
+    else:
+        # of those 15% tokens selected:
+        # - set to mask token with 80% probability
+        # - set to random token with 10% probability
+        # - don't change with 10% probability
+        # TODO replace with simpler torch.rand
+        if change_all_to_mask:
+            probs = [1.0]
+        else:
+            probs = [0.8, 0.1, 0.1]
+        action = torch.multinomial(
+            torch.tensor(probs, device=tokens.device),
+            num_samples=selected_idxs.numel(),
+            replacement=True
+        )
+        action = action.reshape(selected_idxs.shape)
 
-    random_tokens = torch.randint(vocab_len, size=action.shape)
-    masked_tokens = torch.where(action == 1, random_tokens, masked_tokens)
-    
-    masked_tokens = torch.where(action == 2, tokens[masked_tokens_idx], masked_tokens)
+        masked_tokens = torch.where(action == 0, mask_token.to(tokens.device), action)
+
+        random_tokens = torch.randint(vocab_len, size=action.shape, device=tokens.device)
+
+        masked_tokens = torch.where(action == 1, random_tokens, masked_tokens)
+        masked_tokens = torch.where(action == 2, tokens[masked_tokens_idx], masked_tokens)
     
     return masked_tokens_idx, masked_tokens
 
@@ -155,7 +168,9 @@ class RNAModel(nn.Module):
         )
 
         self.final_norm = nn.LayerNorm(cfg["embd"])
-        self.out_head = nn.Linear(cfg["embd"], cfg["out_dim"], bias=False)
+
+        # -2 because we ignore mask and pad tokens
+        self.out_head = nn.Linear(cfg["embd"], cfg["vocab_len"]-2, bias=False)
 
     def forward(self, tokens):
         batch_len, seq_len = tokens.shape
@@ -167,10 +182,11 @@ class RNAModel(nn.Module):
         # vocab_len-1 because the last token is the pad token
         masked_tokens_idx, masked_tokens = mask_tokens(tokens, self.mask_token, self.vocab_len-1)
 
-        # update original tokens
-        tokens[masked_tokens_idx] = masked_tokens
+        # create copy of original tokens since original tokens we use for cross entropy
+        masked = tokens.detach().clone()
+        masked[masked_tokens_idx] = masked_tokens
 
-        emb = self.tok_emb(tokens)
+        emb = self.tok_emb(masked)
         pos = self.pos_emb(torch.arange(tokens.shape[-1], device=tokens.device)) 
 
         x = pos + emb
