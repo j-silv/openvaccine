@@ -13,7 +13,7 @@ import random
 def main(): 
     torch.manual_seed(123)
 
-    json_data = load_data(max_lines=10)
+    json_data = load_data(max_lines=3)
 
     tokenizer = RNATokenizer()
     
@@ -30,9 +30,13 @@ def main():
         out_dim=3, # 3 regression targets for each letter in sequence
         n_heads=12, # number of heads in multi-head attention
         n_layers=12, # number of transformer blocks
-        drop_rate=0.1, # dropout probaility for regularization
+        drop_rate=0.0, # dropout probaility for regularization
         qkv_bias=False, # use bias in query, key, value linear projections
-        mask_token=tokenizer.encode("m") # for masking in forward pass
+        mask_token=tokenizer.encode("m"), # for masking in forward pass
+        mask_percent=0.15, # what percentage of tokens to randomly select
+        mask_prob=0.8, # what probability should they be set to mask_id
+        random_prob=0.1, # what probability should they be set to a random token [0, vocab_len-2)
+        same_prob=0.1 # what probability should they not change
     )
 
     model = RNAModel(cfg)

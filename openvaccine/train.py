@@ -22,16 +22,17 @@ def pretrain(model, train_dataloader, val_dataloader, epochs=30000, lr=0.001):
             B, T = y1.shape
 
             sequence = sequence.to(device)
-
+        
             masked_tokens_idx, logits = model(sequence) # B, T, 3
 
             masked_tokens_predicted = logits[masked_tokens_idx]
-            masked_tokens_predicted= masked_tokens_predicted.flatten(0, 1)
-
             masked_tokens_target = sequence[masked_tokens_idx]
-            masked_tokens_target = masked_tokens_target.flatten(0)
 
-            loss = loss_fn(masked_tokens_predicted, masked_tokens_target)
+            if masked_tokens_predicted.numel() == 0 and masked_tokens_target.numel() == 0.0:
+                raise ValueError("Zero tokens are selected which means loss is technically 0.0. "
+                                 "Change cfg['mask_percent'] to something > zero")
+            else:
+                loss = loss_fn(masked_tokens_predicted, masked_tokens_target)
 
             avg_batch_loss += loss.item()
 

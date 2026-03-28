@@ -101,56 +101,47 @@ class TransformerBlock(nn.Module):
         return x
 
 
-def mask_tokens(tokens, mask_token, vocab_len, change_all_to_mask=True, test_without_masking=False, test_without_sampling=False):
-    # TODO I suspect there is a bug here... loss stays at around 1.0-1.3 when trying to overfit. Might just be capacity of model.
-    # should try removing the 80%, 10%, and 10% thing and just try replacing the indexed tokens with the mask token
-    batch_len, seq_len = tokens.shape
-
-    # to overfit without the random sampling
-    if test_without_masking:
-        selected_idxs = torch.arange(seq_len, device=tokens.device)
-    else:
-        # TODO replace with simpler torch.rand < 0.15
-        # randomly choose 15% of the tokens
-        selected_idxs = torch.multinomial(
-            # every index has equal probability of being selected
-            torch.ones_like(tokens, dtype=torch.float32, device=tokens.device),
-            num_samples=int(0.15*seq_len),
-            replacement=False,
-        )
+def mask_tokens(tokens, mask_id, vocab_len, *,
+                percent=0.15, mask_prob=0.80,
+                random_prob=0.10, same_prob=0.10):
+    """Select a percentange of tokens to mask out (follows Task #1 in BERT)
     
-    # now that we know which indices to select and later we determine which action to perform,
-    # let's select the actual values now
-    # we broadcast the first index array to selected_idxs size so we can select the appropiate elements
-    masked_tokens_idx = (torch.arange(batch_len, device=tokens.device)[:, None], selected_idxs)
+    percent: what percentage of tokens to randomly select (per sequence if tokens is batched)
+             the implementation does not technically always select this percentage of tokens
+             but rather there is a "percent" probability that the ith token is chosen
+    mask_prob: of the selected tokens, with what probability should they be set to mask_id
+    random_prob: of the selected tokens, with what probability should they be set to a random token [0, vocab_len)
+    same_prob: of the selected tokens, with what probability should they not change
+    """
 
-    if test_without_sampling:
-        masked_tokens = tokens[masked_tokens_idx]
-    else:
-        # of those 15% tokens selected:
-        # - set to mask token with 80% probability
-        # - set to random token with 10% probability
-        # - don't change with 10% probability
-        # TODO replace with simpler torch.rand
-        if change_all_to_mask:
-            probs = [1.0]
-        else:
-            probs = [0.8, 0.1, 0.1]
-        action = torch.multinomial(
-            torch.tensor(probs, device=tokens.device),
-            num_samples=selected_idxs.numel(),
-            replacement=True
-        )
-        action = action.reshape(selected_idxs.shape)
-
-        masked_tokens = torch.where(action == 0, mask_token.to(tokens.device), action)
-
-        random_tokens = torch.randint(vocab_len, size=action.shape, device=tokens.device)
-
-        masked_tokens = torch.where(action == 1, random_tokens, masked_tokens)
-        masked_tokens = torch.where(action == 2, tokens[masked_tokens_idx], masked_tokens)
+    if not torch.allclose(torch.tensor(mask_prob + random_prob + same_prob), torch.tensor(1.0)):
+        raise ValueError("mask_prob + random_prob + same_prob needs to sum to 1")
     
-    return masked_tokens_idx, masked_tokens
+    # because we don't want to modify the original tokens which will be used
+    # as the labels for cross entropy
+    masked_tokens = tokens.detach().clone()
+
+    # select a subset of the tokens
+    selected_idxs = torch.rand(tokens.shape) < percent
+
+    original_tokens = masked_tokens[selected_idxs]
+    probs = torch.rand(original_tokens.shape)
+    
+    # set to mask 
+    set_to_mask = probs < mask_prob
+    original_tokens[set_to_mask] = mask_id
+    
+    # randomly select a token id
+    set_to_random = (probs >= mask_prob) & (probs < mask_prob + random_prob)
+    original_tokens[set_to_random] = torch.randint(vocab_len,
+                                                   size=(set_to_random.sum().item(), ), # type: ignore
+                                                   device=tokens.device) 
+    
+    # for the rest do nothing, but update cloned tensor
+    masked_tokens[selected_idxs] = original_tokens
+
+    return selected_idxs, masked_tokens
+
 
 class RNAModel(nn.Module):
     def __init__(self, cfg):
@@ -158,6 +149,10 @@ class RNAModel(nn.Module):
 
         self.vocab_len = cfg["vocab_len"]
         self.mask_token = cfg["mask_token"]
+        self.mask_percent=cfg["mask_percent"]
+        self.mask_prob=cfg["mask_prob"]
+        self.random_prob=cfg["random_prob"]
+        self.same_prob=cfg["same_prob"]
 
         self.tok_emb = nn.Embedding(cfg["vocab_len"], cfg["embd"])
         self.pos_emb = nn.Embedding(cfg["seq_len"], cfg["embd"])
@@ -180,13 +175,12 @@ class RNAModel(nn.Module):
             raise ValueError(f"Unexpected number of elements {seq_len} compared to pos embedding {vocab_len}")
 
         # vocab_len-1 because the last token is the pad token
-        masked_tokens_idx, masked_tokens = mask_tokens(tokens, self.mask_token, self.vocab_len-1)
+        masked_tokens_idx, masked_tokens = mask_tokens(
+            tokens, self.mask_token, self.vocab_len-1,
+            percent=self.mask_percent, mask_prob=self.mask_prob,
+            random_prob=self.random_prob, same_prob=self.same_prob)
 
-        # create copy of original tokens since original tokens we use for cross entropy
-        masked = tokens.detach().clone()
-        masked[masked_tokens_idx] = masked_tokens
-
-        emb = self.tok_emb(masked)
+        emb = self.tok_emb(masked_tokens)
         pos = self.pos_emb(torch.arange(tokens.shape[-1], device=tokens.device)) 
 
         x = pos + emb

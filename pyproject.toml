@@ -28,5 +28,10 @@ license-files = ["LICEN[CS]E*"]
 [project.scripts]
 openvaccine = "openvaccine.main:main"
 
+[project.optional-dependencies]
+test = [
+  "pytest"
+]
+
 [tool.setuptools.packages]
 find = {namespaces = false}  # Disable implicit namespaces
