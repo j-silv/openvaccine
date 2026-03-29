@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.optim import SGD, Adam
 from torch.nn import MSELoss, CrossEntropyLoss
 
-def pretrain(model, train_dataloader, val_dataloader, epochs=30000, lr=0.001):
+def pretrain(model, train_dataloader, val_dataloader, epochs=30000, lr=0.0001):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

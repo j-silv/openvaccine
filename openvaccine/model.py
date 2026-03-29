@@ -174,9 +174,9 @@ class RNAModel(nn.Module):
         if seq_len != vocab_len:
             raise ValueError(f"Unexpected number of elements {seq_len} compared to pos embedding {vocab_len}")
 
-        # vocab_len-1 because the last token is the pad token
+        # vocab_len-2 because the last two tokens are MASK and PAD tokens
         masked_tokens_idx, masked_tokens = mask_tokens(
-            tokens, self.mask_token, self.vocab_len-1,
+            tokens, self.mask_token, self.vocab_len-2,
             percent=self.mask_percent, mask_prob=self.mask_prob,
             random_prob=self.random_prob, same_prob=self.same_prob)
 
