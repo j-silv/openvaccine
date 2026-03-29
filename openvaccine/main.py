@@ -6,21 +6,21 @@ from .data import (
 )
 
 from .model import RNAModel
-from .train import pretrain
+from .train import train
 import torch
 import random
 
 def main(): 
     torch.manual_seed(123)
 
-    json_data = load_data(max_lines=2)
+    json_data = load_data()
 
     tokenizer = RNATokenizer()
     
     train_dataset, val_dataset = split_data(json_data)
 
-    train_dataloader = create_dataloader(train_dataset, tokenizer,batch_size=8)
-    val_dataloader = create_dataloader(val_dataset, tokenizer, batch_size=8)
+    train_dataloader = create_dataloader(train_dataset, tokenizer,batch_size=32)
+    val_dataloader = create_dataloader(val_dataset, tokenizer, batch_size=32)
 
     # inspired from Build an LLM from Scratch
     cfg = dict(
@@ -36,7 +36,8 @@ def main():
         mask_percent=0.15, # what percentage of tokens to randomly select
         mask_prob=0.8, # what probability should they be set to mask_id
         random_prob=0.1, # what probability should they be set to a random token [0, vocab_len-2)
-        same_prob=0.1 # what probability should they not change
+        same_prob=0.1, # what probability should they not change
+        num_regression_targets=3 # how many regression targets
     )
 
     BERT_BASE = dict(
@@ -55,7 +56,8 @@ def main():
 
     model = RNAModel(cfg)
 
-    pretrain(model, train_dataloader, val_dataloader)
+    train(model, train_dataloader, val_dataloader, load_checkpoint="outputs/checkpoints/checkpoint_100.pth")
+    
 
 if __name__ == "__main__":
     main()

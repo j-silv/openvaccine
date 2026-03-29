@@ -188,8 +188,18 @@ class RNAModel(nn.Module):
         x = self.trf_blocks(x)
         x = self.final_norm(x)
         logits = self.out_head(x)
-        return masked_tokens_idx, logits
+
+        # return output before final layer for downstream tasks
+        return masked_tokens_idx, logits, x 
         
 
+class RNAStabilityClassifier(nn.Module):
+    """Wrapper class around RNAModel so that we can load pretrained weights"""
+    def __init__(self, cfg):
+        self.bert = RNAModel(cfg)
+        self.classifier = nn.Linear(cfg["embd"], cfg["num_regression_targets"])
 
-
+    def forward(self, x):
+        x = self.bert(x)
+        x = self.classifier(x)
+        return x
