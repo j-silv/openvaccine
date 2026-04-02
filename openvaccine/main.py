@@ -5,15 +5,38 @@ from .data import (
     RNATokenizer
 )
 
-from .model import RNAModel
-from .train import train
+from .model import RNAStabilityClassifier
+from .pretrain import pretrain
+from .finetune import finetune
 import torch
 import random
+import argparse
+import sys
+
+def get_args():
+    parser = argparse.ArgumentParser(
+        description="OpenVaccine RNA stability prediction",
+        formatter_class=argparse.RawTextHelpFormatter
+    )  
+    
+    parser.add_argument("-c", "--checkpoint_dir", help="Path to checkpoint to load", default=None)
+    subparsers = parser.add_subparsers(dest="stage", metavar="STAGE", help="Training stage to run",
+                                       required=True)
+    
+    subparser = subparsers.add_parser('pretrain', help="Pretrain BERT-style RNA language model on MLM task")
+    subparser = subparsers.add_parser('finetune', help="Finetune BERT-style RNA language model on stability regression task")
+
+    args = parser.parse_args(args=None if sys.argv[1:] else ['--help'])
+
+    return args
 
 def main(): 
+
+    args = get_args()
+        
     torch.manual_seed(123)
 
-    json_data = load_data()
+    json_data = load_data(max_lines=100)
 
     tokenizer = RNATokenizer()
     
@@ -54,10 +77,36 @@ def main():
 
     cfg.update(BERT_BASE)
 
-    model = RNAModel(cfg)
+    model = RNAStabilityClassifier(cfg)
 
-    train(model, train_dataloader, val_dataloader, load_checkpoint="outputs/checkpoints/checkpoint_100.pth")
-    
+    train_args = dict(
+        epochs=1000,
+        lr=0.0001,
+        val_interval_per_step=50,
+        checkpoint_dir=None,
+        checkpoint_interval=50
+    )
+
+    if args.checkpoint_dir:
+        train_args["checkpoint_dir"] = args.checkpoint_dir
+
+    if args.stage == "pretrain":
+        pretrain(model.bert,
+                 train_dataloader,
+                 val_dataloader,
+                 "outputs/pretrain",
+                 **train_args
+                 )
+        
+    elif args.stage == "finetune":
+        finetune(model,
+                 train_dataloader,
+                 val_dataloader,
+                 "outputs/finetune",
+                 **train_args
+                 )
+    else:
+        raise ValueError("Unexpected stage", args.stage)
 
 if __name__ == "__main__":
     main()

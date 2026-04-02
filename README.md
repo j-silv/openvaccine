@@ -15,3 +15,20 @@ source venv/bin/activate
 pip install -e .
 ```
 
+To run pretraining (this runs the BERT masked language modeling task), run the following:
+
+```
+openvaccine pretrain
+```
+
+To run finetuning (this fine-tunes the model on the stability regression task), run the following:
+
+```
+openvaccine finetune
+```
+
+To load from a particular checkpoint, pass in the `-c/--checkpoint_dir` argument:
+
+```
+openvaccine pretrain -c "outputs/pretrain/checkpoints/30.pth"
+```

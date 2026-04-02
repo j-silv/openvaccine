@@ -167,18 +167,23 @@ class RNAModel(nn.Module):
         # -2 because we ignore mask and pad tokens
         self.out_head = nn.Linear(cfg["embd"], cfg["vocab_len"]-2, bias=False)
 
-    def forward(self, tokens):
+    def forward(self, tokens, perform_masking=True):
         batch_len, seq_len = tokens.shape
         vocab_len = self.pos_emb.weight.shape[0]
 
         if seq_len != vocab_len:
             raise ValueError(f"Unexpected number of elements {seq_len} compared to pos embedding {vocab_len}")
-
-        # vocab_len-2 because the last two tokens are MASK and PAD tokens
-        masked_tokens_idx, masked_tokens = mask_tokens(
-            tokens, self.mask_token, self.vocab_len-2,
-            percent=self.mask_percent, mask_prob=self.mask_prob,
-            random_prob=self.random_prob, same_prob=self.same_prob)
+        
+        if perform_masking:
+            # vocab_len-2 because the last two tokens are MASK and PAD tokens
+            masked_tokens_idx, masked_tokens = mask_tokens(
+                tokens, self.mask_token, self.vocab_len-2,
+                percent=self.mask_percent, mask_prob=self.mask_prob,
+                random_prob=self.random_prob, same_prob=self.same_prob)
+        else:
+            # for when we have fine-tuning we don't want to mask anything
+            masked_tokens_idx = torch.ones_like(tokens).bool()
+            masked_tokens = tokens.detach().clone()
 
         emb = self.tok_emb(masked_tokens)
         pos = self.pos_emb(torch.arange(tokens.shape[-1], device=tokens.device)) 
@@ -196,10 +201,11 @@ class RNAModel(nn.Module):
 class RNAStabilityClassifier(nn.Module):
     """Wrapper class around RNAModel so that we can load pretrained weights"""
     def __init__(self, cfg):
+        super().__init__()
         self.bert = RNAModel(cfg)
         self.classifier = nn.Linear(cfg["embd"], cfg["num_regression_targets"])
 
     def forward(self, x):
-        x = self.bert(x)
+        _, _, x = self.bert(x, perform_masking=False)
         x = self.classifier(x)
         return x
