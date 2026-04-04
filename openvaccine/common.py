@@ -74,7 +74,8 @@ def train(model,
           lr=0.0001,
           val_interval_per_step=100,
           load_checkpoint=None,
-          checkpoint_interval=100):
+          checkpoint_interval=100,
+          early_stopping=False):
     """Common training loop for both pretraining and finetuning"""
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -110,7 +111,13 @@ def train(model,
                                                              train_dataloader,
                                                              val_dataloader,
                                                              device,
-                                                             num_batches=10)
+                                                             num_batches=50)
+                
+                if len(val_losses) > 0 and early_stopping:
+                    if val_loss > val_losses[-1]:
+                        print(f"EARLY STOPPING WITH VAL LOSS {val_loss:.4f} - best val loss is {val_losses[-1]:.4f}")
+                        return
+
                 train_losses.append(train_loss)
                 val_losses.append(val_loss)
                 loss_at_step.append(global_step)

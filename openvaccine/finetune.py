@@ -24,16 +24,25 @@ def load_checkpoint(model, optimizer, checkpoint_dir):
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint = torch.load(checkpoint_dir)
 
-    model.bert.load_state_dict(checkpoint["model_bert_state_dict"])
-    model.classifier.load_state_dict(checkpoint["model_classifier_state_dict"])
-   
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    if "model_bert_state_dict" in checkpoint:
+        print("Resuming checkpoint from finetuning step")
+        model.bert.load_state_dict(checkpoint["model_bert_state_dict"])
+        model.classifier.load_state_dict(checkpoint["model_classifier_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-    starting_epoch = checkpoint.get("epoch", 0)
-    global_step = checkpoint.get("global_step", 0)
-    train_losses = checkpoint.get("train_losses", [])
-    val_losses = checkpoint.get("val_losses", [])
-    loss_at_step = checkpoint.get("loss_at_step", [])
+        starting_epoch = checkpoint.get("epoch", 0)
+        global_step = checkpoint.get("global_step", 0)
+        train_losses = checkpoint.get("train_losses", [])
+        val_losses = checkpoint.get("val_losses", [])
+        loss_at_step = checkpoint.get("loss_at_step", [])
+    else:
+        print("Resuming checkpoint from pretraining")
+        model.bert.load_state_dict(checkpoint["model_state_dict"])   
+        starting_epoch = 0
+        global_step = 0
+        train_losses = []
+        val_losses = []
+        loss_at_step = []
 
     return starting_epoch, global_step, train_losses, val_losses, loss_at_step
 
@@ -71,7 +80,8 @@ def finetune(model,
              lr=0.0001,
              val_interval_per_step=5,
              checkpoint_dir=None,
-             checkpoint_interval=5):
+             checkpoint_interval=5,
+             early_stopping=True):
     """Wrapper around training loop for finetuning stage"""
 
     train(
@@ -87,4 +97,5 @@ def finetune(model,
         epochs=epochs,
         lr=lr,
         val_interval_per_step=val_interval_per_step,
-        checkpoint_interval=checkpoint_interval)
+        checkpoint_interval=checkpoint_interval,
+        early_stopping=early_stopping)

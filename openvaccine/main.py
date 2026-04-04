@@ -12,6 +12,8 @@ import torch
 import random
 import argparse
 import sys
+import datetime as dt
+
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -20,13 +22,14 @@ def get_args():
     )  
     
     parser.add_argument("-c", "--checkpoint_dir", help="Path to checkpoint to load", default=None)
+    parser.add_argument("-n", "--num_samples", type=int, help="Number of total data samples to load. If None, load all samples.", default=None)
     subparsers = parser.add_subparsers(dest="stage", metavar="STAGE", help="Training stage to run",
                                        required=True)
     
     subparser = subparsers.add_parser('pretrain', help="Pretrain BERT-style RNA language model on MLM task")
     subparser = subparsers.add_parser('finetune', help="Finetune BERT-style RNA language model on stability regression task")
 
-    args = parser.parse_args(args=None if sys.argv[1:] else ['--help'])
+    args = parser.parse_args()
 
     return args
 
@@ -36,7 +39,7 @@ def main():
         
     torch.manual_seed(123)
 
-    json_data = load_data(max_lines=100)
+    json_data = load_data(max_lines=args.num_samples)
 
     tokenizer = RNATokenizer()
     
@@ -53,7 +56,7 @@ def main():
         out_dim=3, # 3 regression targets for each letter in sequence
         n_heads=12, # number of heads in multi-head attention
         n_layers=12, # number of transformer blocks
-        drop_rate=0.0, # dropout probaility for regularization
+        drop_rate=0.1, # dropout probaility for regularization
         qkv_bias=False, # use bias in query, key, value linear projections
         mask_token=tokenizer.l2t["m"], # for masking in forward pass
         mask_percent=0.15, # what percentage of tokens to randomly select
@@ -80,12 +83,15 @@ def main():
     model = RNAStabilityClassifier(cfg)
 
     train_args = dict(
-        epochs=1000,
+        epochs=50,
         lr=0.0001,
-        val_interval_per_step=50,
+        val_interval_per_step=len(train_dataloader),
         checkpoint_dir=None,
-        checkpoint_interval=50
+        checkpoint_interval=len(train_dataloader),
+        early_stopping=False,
     )
+
+    date_and_time_id = dt.datetime.now().strftime("%m%d%y-%H%M%S")
 
     if args.checkpoint_dir:
         train_args["checkpoint_dir"] = args.checkpoint_dir
@@ -94,7 +100,7 @@ def main():
         pretrain(model.bert,
                  train_dataloader,
                  val_dataloader,
-                 "outputs/pretrain",
+                 f"outputs/pretrain/{date_and_time_id}",
                  **train_args
                  )
         
@@ -102,7 +108,7 @@ def main():
         finetune(model,
                  train_dataloader,
                  val_dataloader,
-                 "outputs/finetune",
+                 f"outputs/finetune/{date_and_time_id}",
                  **train_args
                  )
     else:

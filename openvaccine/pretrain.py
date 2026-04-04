@@ -74,7 +74,8 @@ def pretrain(model,
              lr=0.0001,
              val_interval_per_step=5,
              checkpoint_dir=None,
-             checkpoint_interval=5):
+             checkpoint_interval=5,
+             early_stopping=True):
     """Wrapper around training loop for pretraining stage"""
 
     train(
@@ -90,7 +91,8 @@ def pretrain(model,
         epochs=epochs,
         lr=lr,
         val_interval_per_step=val_interval_per_step,
-        checkpoint_interval=checkpoint_interval)
+        checkpoint_interval=checkpoint_interval,
+        early_stopping=early_stopping)
 
 
 
