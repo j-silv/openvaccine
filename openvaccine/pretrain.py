@@ -4,16 +4,13 @@ from pathlib import Path
 from .common import (
     train
 )
-def save_checkpoint(global_step,
-                    epoch,
+def save_checkpoint(epoch,
                     model,
                     optimizer,
                     train_losses,
                     val_losses,
                     loss_at_step,
                     checkpoint_dir):
-    print(f"Saving checkpoint at step {global_step}")
-
 
     if not checkpoint_dir.exists():
         checkpoint_dir.mkdir(exist_ok=True, parents=True)   
@@ -21,14 +18,13 @@ def save_checkpoint(global_step,
         
     checkpoint = dict(
         epoch=epoch,
-        global_step=global_step,
         model_state_dict=model.state_dict(),
         optimizer_state_dict=optimizer.state_dict(),
         train_losses=train_losses,
         val_losses=val_losses,
         loss_at_step=loss_at_step
     )
-    torch.save(checkpoint, str(checkpoint_dir / f"{global_step}.pth"))
+    torch.save(checkpoint, str(checkpoint_dir / f"{epoch}.pth"))
 
 def load_checkpoint(model, optimizer, checkpoint_dir):
     """Load checkpoint for pretraining step"""
@@ -40,13 +36,12 @@ def load_checkpoint(model, optimizer, checkpoint_dir):
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-    starting_epoch = checkpoint.get("epoch", 0)
-    global_step = checkpoint.get("global_step", 0)
+    epoch = checkpoint.get("epoch", 0)
     train_losses = checkpoint.get("train_losses", [])
     val_losses = checkpoint.get("val_losses", [])
     loss_at_step = checkpoint.get("loss_at_step", [])
 
-    return starting_epoch, global_step, train_losses, val_losses, loss_at_step
+    return epoch, train_losses, val_losses, loss_at_step
 
 
 def calc_loss(model, sequence, loss_fn, labels):
@@ -66,33 +61,14 @@ def calc_loss(model, sequence, loss_fn, labels):
     
     return loss
 
-def pretrain(model,
-             train_dataloader,
-             val_dataloader,
-             output_dir,
-             epochs=30000,
-             lr=0.0001,
-             val_interval_per_step=5,
-             checkpoint_dir=None,
-             checkpoint_interval=5,
-             early_stopping=True):
+def pretrain(**train_args):
     """Wrapper around training loop for pretraining stage"""
 
-    train(
-        model,
-        train_dataloader,
-        val_dataloader,
-        output_dir,
-        CrossEntropyLoss(),
-        calc_loss,
-        load_checkpoint,
-        save_checkpoint,
-        checkpoint_dir,
-        epochs=epochs,
-        lr=lr,
-        val_interval_per_step=val_interval_per_step,
-        checkpoint_interval=checkpoint_interval,
-        early_stopping=early_stopping)
+    train(loss_fn=CrossEntropyLoss(),
+          calc_loss_fn=calc_loss,
+          load_checkpoint_fn=load_checkpoint,
+          save_checkpoint_fn=save_checkpoint,
+          **train_args)
 
 
 
