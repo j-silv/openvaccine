@@ -75,6 +75,7 @@ def main():
 
     args = get_args(bert_model_sizes.keys())
 
+    random.seed(123)
     torch.manual_seed(123)
     
     tokenizer = RNATokenizer()

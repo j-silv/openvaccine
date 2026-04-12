@@ -33,7 +33,7 @@ def get_dataloader_losses(model,
                           device,
                           num_batches=None):
     """Get losses over dataloaders for either pretrain/finetune"""
-
+    
     model.eval()
 
     losses = dict(train=0.0, val=0.0)
@@ -43,6 +43,8 @@ def get_dataloader_losses(model,
 
             if not num_batches:
                 num_batches = len(data_loader)
+            else:
+                num_batches = min(num_batches, len(data_loader))
 
             for batch, (sequence, y1, y2, y3) in enumerate(data_loader):
                 sequence = sequence.to(device)

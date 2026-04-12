@@ -2,6 +2,7 @@ import json
 from torch.utils.data import DataLoader, Dataset
 import torch
 import matplotlib.pyplot as plt
+import random
 
 class RNATokenizer:
     """Very simple tokenizer which converts RNA strings into PyTorch tensors and vice versa"""
@@ -74,7 +75,10 @@ class OpenVaccineDataset(Dataset):
     def __len__(self):
         return len(self.sequences)
 
-def split_data(json_data, data_split=0.9):
+def split_data(json_data, data_split=0.9, shuffle_data=True):
+    if shuffle_data:
+        random.shuffle(json_data)
+
     data_split_index = int(data_split*len(json_data))
 
     train_data = json_data[:data_split_index]
