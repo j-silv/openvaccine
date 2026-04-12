@@ -5,56 +5,8 @@ import torch.nn as nn
 from torch.optim import SGD, Adam
 from torch.nn import MSELoss, CrossEntropyLoss
 
-def early_stop(losses, patience_losses, current_loss, patience):
-    """My implementation for ML training early stopping with patience
-    
-    losses: a list of saved losses that monotonically decrease
-    patience_losses: accumulated losses which are all >= losses[-1]
-    current_loss: current loss which will determine if we stop early or not based on other params
-    patience: how many losses do we accumulate that are >= losses[-1] before we early stop
 
-    depending on whether or not we have violated patience, the losses 
-    and patience_losses lists in place. for example, if the loss is lower than losses[-1]
-    then we append to losses and clear the patience_losses list.
-    
-    returns a tuple of booleans
-
-    stop_training: patience violated, so we should stop training. if false, we might still be in patience interval.
-    save_loss: we can save the current loss and patience is reset. used by caller to save checkpoint.
-    """
-
-    # first loss, we always save
-    if len(losses) == 0:
-        return False, True
-    
-    # case where we either reset patience or have violated patience
-    if len(patience_losses) == patience:
-        if current_loss >= losses[-1]:
-            # violated patience
-            return True, False
-        else:
-            # reset patience
-            patience_losses.clear()
-            losses.append(current_loss)
-            return False, True
-    
-    # case where we either reset patience or we append to patience list
-    elif len(patience_losses) < patience:
-        if current_loss >= losses[-1]:
-            # not yet violated so append to growing patience list
-            patience_losses.append(current_loss)
-            return False, False
-        else:
-            # reset patience
-            patience_losses.clear()
-            losses.append(current_loss)
-            return False, True
-
-    else:
-        raise ValueError("size of patience_losses should never be greater than patience")
-
-
-def plot_loss_curves(train_losses, val_losses, loss_at_step, output_dir):
+def plot_loss_curves(loss_at_epoch, train_losses, val_losses, output_dir):
     """Train and validation loss curves"""
 
     output_dir = Path(output_dir)
@@ -62,8 +14,8 @@ def plot_loss_curves(train_losses, val_losses, loss_at_step, output_dir):
         output_dir.mkdir(parents=True, exist_ok=True)
 
     plt.figure()
-    plt.plot(loss_at_step, train_losses, label="train")
-    plt.plot(loss_at_step, val_losses, label="val")
+    plt.plot(loss_at_epoch, train_losses, label="train")
+    plt.plot(loss_at_epoch, val_losses, label="val")
     plt.xlabel('step')
     plt.ylabel('loss')
     plt.title("Loss curves")
@@ -153,17 +105,20 @@ def train(*,
             checkpoint_dir.mkdir(exist_ok=True, parents=True)
     
     if checkpoint:
-        starting_epoch, train_losses, val_losses, loss_at_step = \
+        starting_epoch, train_losses, val_losses, loss_at_epoch = \
             load_checkpoint_fn(model, optimizer, checkpoint)
+        
+        # because if we saved a checkpoint with early stopping
+        # then the most recent loss is the best one
+        best_loss = val_losses[-1]
     else:
         starting_epoch = 0
         train_losses = []
         val_losses = []
-        loss_at_step = []
+        loss_at_epoch = []
+        best_loss = float("inf")
 
-    # either way we start at fresh patience cause if the checkpoint is saved
-    # the patience is reset
-    patience_losses = []
+    patience_count = 0
 
     for epoch in range(starting_epoch, epochs):
 
@@ -175,37 +130,42 @@ def train(*,
                                                         val_dataloader,
                                                         device,
                                                         num_batches=validation_batch_size)
-            
-            save_loss = True
-            if early_stopping:
-                stop_training, save_loss = early_stop(val_losses, patience_losses, val_loss, patience)
-                if stop_training:
-                    print(f"EARLY STOPPING WITH VAL LOSS {val_loss:.4f} - best val loss is {val_losses[-1]:.4f}")
-                    return
-            
+
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
+            loss_at_epoch.append(epoch)
+
+            plot_loss_curves(loss_at_epoch, train_losses, val_losses, output_dir)
+
             print(f"Epoch ({epoch}/{epochs}) | Avg Train Loss {train_loss:.4f} |  Avg Val Loss {val_loss:.4f}", end="")
 
-            if save_loss:
-                train_losses.append(train_loss)
-                val_losses.append(val_loss)
-                loss_at_step.append(epoch)
-                plot_loss_curves(train_losses, val_losses, loss_at_step, output_dir)
-
-                if not disable_checkpoint:
-                    save_checkpoint_fn( epoch,
-                                        model,
-                                        optimizer,
-                                        train_losses,
-                                        val_losses,
-                                        loss_at_step,
-                                        checkpoint_dir)
-                    print(" (checkpoint saved)")
+            if early_stopping:
+                            
+                if val_loss >= best_loss:
+                    if patience_count == patience:
+                        print(f"\nEARLY STOPPING WITH VAL LOSS {val_loss:.4f} - best val loss is {best_loss:.4f}")
+                        return
+                    
+                    patience_count += 1
+                    print(f" patience ({patience_count}/{patience})")
                 else:
-                    print("")
+                    patience_count = 0
 
+                    if not disable_checkpoint:
+                        save_checkpoint_fn( epoch,
+                                            model,
+                                            optimizer,
+                                            train_losses,
+                                            val_losses,
+                                            loss_at_epoch,
+                                            checkpoint_dir)
+                        print(" (checkpoint saved)")
+                    else:
+                        print("")
             else:
-                print(f" patience ({len(patience_losses)}/{patience})")
+                print("")
 
+            best_loss = min(best_loss, val_loss)
 
 
         model.train()

@@ -13,6 +13,7 @@ import random
 import argparse
 import sys
 import datetime as dt
+from pathlib import Path
 
 
 
@@ -130,11 +131,18 @@ def main():
 
     elif args.stage == "finetune":
         train_fn = finetune
-        output_dir = f"outputs/finetune/{date_and_time_id}",
+        output_dir = f"outputs/finetune/{date_and_time_id}"
         train_model = model
         
     else:
         raise ValueError("Unexpected stage", args.stage)
+
+    output_dir = Path(output_dir)
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(output_dir / "command.txt", "w") as f:
+        f.write(" ".join(sys.argv))
 
     train_fn(model=train_model, output_dir=output_dir, **train_args)
 

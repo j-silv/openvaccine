@@ -35,7 +35,7 @@ def load_checkpoint(model, optimizer, checkpoint_dir):
         epoch = checkpoint.get("epoch", 0)
         train_losses = checkpoint.get("train_losses", [])
         val_losses = checkpoint.get("val_losses", [])
-        loss_at_step = checkpoint.get("loss_at_step", [])
+        loss_at_epoch = checkpoint.get("loss_at_epoch", [])
     else:
         print("Resuming checkpoint from pretraining")
         model.bert.load_state_dict(checkpoint["model_state_dict"])   
@@ -43,16 +43,16 @@ def load_checkpoint(model, optimizer, checkpoint_dir):
         global_step = 0
         train_losses = []
         val_losses = []
-        loss_at_step = []
+        loss_at_epoch = []
 
-    return epoch, train_losses, val_losses, loss_at_step
+    return epoch, train_losses, val_losses, loss_at_epoch
 
 def save_checkpoint(epoch,
                     model,
                     optimizer,
                     train_losses,
                     val_losses,
-                    loss_at_step,
+                    loss_at_epoch,
                     checkpoint_dir):
 
     if not checkpoint_dir.exists():
@@ -65,7 +65,7 @@ def save_checkpoint(epoch,
         optimizer_state_dict=optimizer.state_dict(),
         train_losses=train_losses,
         val_losses=val_losses,
-        loss_at_step=loss_at_step
+        loss_at_epoch=loss_at_epoch
     )
     torch.save(checkpoint, str(checkpoint_dir / f"{epoch}.pth"))
 
